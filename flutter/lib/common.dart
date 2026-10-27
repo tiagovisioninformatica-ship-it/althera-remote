@@ -3021,7 +3021,10 @@ int versionCmp(String v1, String v2) {
 }
 
 String getWindowName({WindowType? overrideType}) {
-  final name = bind.mainGetAppNameSync();
+  final rawName = bind.mainGetAppNameSync();
+  // Althera: APP_NAME interno e "AltheraRemote" (sem espaco, p/ dir de config e
+  // url-scheme). Na barra de titulo mostramos a marca com espaco.
+  final name = rawName == 'AltheraRemote' ? 'Althera Remote' : rawName;
   switch (overrideType ?? kWindowType) {
     case WindowType.Main:
       return name;

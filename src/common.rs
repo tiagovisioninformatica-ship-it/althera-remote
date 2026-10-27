@@ -1011,6 +1011,13 @@ pub fn is_modifier(evt: &KeyEvent) -> bool {
 }
 
 pub fn check_software_update() {
+    // Althera: cliente corporativo auto-hospedado. Nunca consultar o servidor de
+    // atualizacoes publico (api.rustdesk.com) nem exibir o aviso de nova versao.
+    // As atualizacoes sao distribuidas pela Althera, nao pelo upstream.
+    // (if true evita warning de unreachable_code mantendo o codigo original abaixo.)
+    if true {
+        return;
+    }
     if is_custom_client() {
         return;
     }
