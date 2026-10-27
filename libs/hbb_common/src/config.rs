@@ -115,8 +115,8 @@ const CHARS: &[char] = &[
 ];
 
 pub const RENDEZVOUS_SERVERS: &[&str] = &["168.197.181.40"];
-// TODO(althera): substituir pela chave pública do hbbs da VPS1 (data/id_ed25519.pub) — placeholder (caminho b)
-pub const RS_PUB_KEY: &str = "REPLACE_WITH_ALTHERA_SERVER_PUBKEY=";
+// Chave pública do hbbs da VPS1 (id_ed25519.pub) — servidor self-hosted Althera.
+pub const RS_PUB_KEY: &str = "BaefSpOCqHgA31G75jNsrIrGcexYXSthfkcZJ20szag=";
 
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;
