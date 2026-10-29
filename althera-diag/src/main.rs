@@ -61,8 +61,35 @@ fn server_from_args() -> String {
         .unwrap_or_else(|| DEFAULT_SERVER.to_string())
 }
 
-fn js(webview: &WebView, ev: Value) {
-    let _ = webview.evaluate_script(&format!("window.althera({ev})"));
+fn js(webview: &Option<WebView>, ev: Value) {
+    if let Some(w) = webview {
+        let _ = w.evaluate_script(&format!("window.althera({ev})"));
+    }
+}
+
+/// Apaga a pasta de dados do WebView2 (tenta por até ~3 s: o processo do Edge solta os
+/// arquivos logo depois que a janela fecha).
+fn remove_data_dir(dir: &std::path::Path) {
+    for _ in 0..30 {
+        if std::fs::remove_dir_all(dir).is_ok() || !dir.exists() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// Sobras de execuções anteriores (ex.: fechado à força) com mais de 10 minutos.
+fn clean_old_data_dirs(tmp: &std::path::Path) {
+    let Ok(rd) = std::fs::read_dir(tmp) else { return };
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let old = e.metadata().and_then(|m| m.modified()).ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|d| d > Duration::from_secs(600));
+        if name.starts_with("AltheraDiag-") && old {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
 }
 
 fn host_of(url: &str) -> String {
@@ -95,8 +122,15 @@ fn main() {
     let hwnd = window.hwnd() as isize;
     win::set_window_icon(hwnd);
 
+    // Dados do WebView2 numa pasta temporária (nunca ao lado do exe), apagada ao fechar:
+    // o programa não deixa nada no computador do cliente.
+    let tmp = std::env::temp_dir();
+    clean_old_data_dirs(&tmp);
+    let data_dir = tmp.join(format!("AltheraDiag-{}", std::process::id()));
+    let mut web_ctx = wry::WebContext::new(Some(data_dir.clone()));
+
     let ipc_proxy = event_loop.create_proxy();
-    let webview = match WebViewBuilder::new()
+    let webview = match WebViewBuilder::new_with_web_context(&mut web_ctx)
         .with_html(html)
         .with_devtools(false)
         // a página nunca sai do HTML embutido
@@ -118,19 +152,22 @@ fn main() {
         }
     };
 
+    let mut webview = Some(webview);
     let net_proxy = event_loop.create_proxy();
     let mut to_net: Option<Sender<NetCmd>> = None;
     let mut worker: Option<JoinHandle<()>> = None;
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
-        let _ = &window;
+        let _ = (&window, &web_ctx);
         match event {
             Event::UserEvent(AppEvent::Ipc(body)) => {
                 let m: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
                 match m["cmd"].as_str().unwrap_or("") {
                     "elevate" if to_net.is_none() => {
                         if win::relaunch_as_admin() {
+                            webview.take();
+                            remove_data_dir(&data_dir);
                             *control_flow = ControlFlow::Exit;
                         } else {
                             js(&webview, json!({"t": "alert", "text": "O Windows não concedeu permissão de administrador."}));
@@ -218,6 +255,8 @@ fn main() {
                         std::thread::sleep(Duration::from_millis(50));
                     }
                 }
+                webview.take();
+                remove_data_dir(&data_dir);
                 *control_flow = ControlFlow::Exit;
             }
             _ => {}
