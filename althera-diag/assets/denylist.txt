@@ -1,0 +1,20 @@
+# Regras do "modo técnico". Formato: nivel<TAB>motivo<TAB>regex (sem diferenciar maiúsculas).
+#   bloquear  = nunca roda (só serve para destruir ou roubar)
+#   sensivel  = roda só com confirmação do CLIENTE (janela nativa, comando exato) E aprovação
+#               de um técnico humano da Althera pelo Telegram
+# Mesma lista no gateway e no agente (tests/e2e_gateway.py confere que as cópias são idênticas).
+bloquear	apagar ou formatar disco	\b(format(-volume)?|clear-disk|initialize-disk|remove-partition|diskpart)\b
+bloquear	apagar cópias de segurança do Windows	\b(vssadmin(\.exe)?\s+delete|wbadmin(\.exe)?\s+delete|cipher(\.exe)?\s+/w)
+bloquear	apagar pasta do sistema ou do usuário	\b(remove-item|rm|del|erase|rd|rmdir)\b[^\n;|]*(-recurse|/s)[^\n;|]*(c:\\?|c:\\(windows|users|program files|programdata)\\?|\$env:(systemroot|windir|userprofile|programfiles)\\?)[\"']?(\s|$|[;|])|\b(remove-item|rm|del|erase|rd|rmdir)\b[^\n;|]*(c:\\?|c:\\(windows|users|program files|programdata)\\?|\$env:(systemroot|windir|userprofile|programfiles)\\?)[\"']?(\s|$|[;|])[^\n;|]*(-recurse|/s)
+bloquear	ler senhas ou credenciais	\b(mimikatz|sekurlsa|procdump|lsass|cmdkey(\.exe)?\s+/list|vaultcmd|export-pfxcertificate|dpapi)\b|reg(\.exe)?\s+save\s+hklm\\(sam|security|system)|login data|\\cookies\b
+bloquear	comando escondido ou ofuscado	(-enc(odedcommand)?\b|frombase64string|\binvoke-expression\b|\biex\b)
+bloquear	apagar logs do Windows	\b(wevtutil(\.exe)?\s+cl|clear-eventlog|remove-eventlog)\b
+sensivel	alterar a inicialização do Windows (modo de segurança etc.)	\bbcdedit\b
+sensivel	mexer no antivírus ou no firewall	(mppreference|set-netfirewallprofile|advfirewall|(stop-service|set-service|sc(\.exe)?\s+(stop|config|delete))[^\n]*\b(windefend|wscsvc|mpssvc|sense|securityhealthservice|avast|avg|eset|ekrn|kaspersky|avp|norton|mcafee)\b)
+sensivel	desinstalar antivírus	(uninstall|msiexec[^\n]*/x)[^\n]*(defender|avast|avg|eset|kaspersky|norton|mcafee|bitdefender|sophos)
+sensivel	criar ou alterar usuários e senhas	(\bnet(\.exe)?\s+user\b[^\n]*(/add|/delete|\s\*\s*$|\s\S+\s+\S+)|\bnet(\.exe)?\s+localgroup\b[^\n]*(/add|/delete)|\b(new|set|remove)-localuser\b|\badd-localgroupmember\b)
+sensivel	mexer no BitLocker	\b(manage-bde|disable-bitlocker|suspend-bitlocker|backupto(aad|ad)|recoverypassword)\b
+sensivel	baixar de site fora da lista ou copiar dados para fora	\b(invoke-webrequest|iwr|invoke-restmethod|irm|start-bitstransfer|bitsadmin|net\.webclient|downloadstring|downloadfile|curl(\.exe)?|wget|ftp(\.exe)?|scp|tftp|certutil[^\n]*-urlcache)\b
+sensivel	programa que inicia sozinho com o Windows	(\bschtasks(\.exe)?\s+/create|\bregister-scheduledtask\b|\bnew-scheduledtask|\\currentversion\\run(once)?\b|\bnew-service\b|\bsc(\.exe)?\s+create\b)
+sensivel	desinstalar programa	(\bmsiexec(\.exe)?\b[^\n]*\s/x\b|\buninstall-package\b|\bwinget(\.exe)?\s+uninstall\b|\buninstallstring\b|\buninstall\.exe\b)
+sensivel	instalar de repositório não oficial	\b(choco(latey)?|scoop)(\.exe)?\s+install\b

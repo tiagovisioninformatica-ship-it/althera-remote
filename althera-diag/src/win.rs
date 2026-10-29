@@ -17,6 +17,7 @@ use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 pub const MAX_CMD_OUTPUT: usize = 24 * 1024;
+pub const MAX_PS_OUTPUT: usize = 200 * 1024;
 
 fn wide(s: &str) -> Vec<u16> {
     OsStr::new(s).encode_wide().chain(Some(0)).collect()
@@ -321,6 +322,118 @@ pub fn clipboard_text(hwnd: isize) -> Option<String> {
     }
 }
 
+/// Texto -> bytes na code page OEM (caracteres fora dela viram '?').
+fn to_oem(s: &str) -> Vec<u8> {
+    use windows_sys::Win32::Globalization::WideCharToMultiByte;
+    let w: Vec<u16> = s.encode_utf16().collect();
+    if w.is_empty() {
+        return Vec::new();
+    }
+    unsafe {
+        let n = WideCharToMultiByte(CP_OEMCP, 0, w.as_ptr(), w.len() as i32, std::ptr::null_mut(), 0,
+                                    std::ptr::null(), std::ptr::null_mut());
+        if n <= 0 {
+            return s.as_bytes().to_vec();
+        }
+        let mut out = vec![0u8; n as usize];
+        WideCharToMultiByte(CP_OEMCP, 0, w.as_ptr(), w.len() as i32, out.as_mut_ptr(), n,
+                            std::ptr::null(), std::ptr::null_mut());
+        out
+    }
+}
+
+/// O AltheraDiag está rodando como administrador?
+pub fn is_admin() -> bool {
+    unsafe { windows_sys::Win32::UI::Shell::IsUserAnAdmin() != 0 }
+}
+
+/// Reabre o próprio AltheraDiag pedindo elevação (UAC). Devolve true se o Windows aceitou.
+pub fn relaunch_as_admin() -> bool {
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    let exe = std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+    let args: Vec<String> = std::env::args().skip(1).map(|a| format!("\"{a}\"")).collect();
+    let (verb, file, params) = (wide("runas"), wide(&exe), wide(&args.join(" ")));
+    let r = unsafe {
+        ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), file.as_ptr(), params.as_ptr(),
+                      std::ptr::null(), wm::SW_SHOWNORMAL)
+    };
+    r as isize > 32
+}
+
+/// Modo técnico: roda um script PowerShell (texto pela entrada padrão, sem -EncodedCommand),
+/// com saída UTF-8, tempo e tamanho limitados. Devolve (código de saída, saída).
+pub fn run_powershell(script: &str, timeout: Duration) -> (Option<i32>, String) {
+    use std::io::Write;
+    let ps = system32("WindowsPowerShell\\v1.0\\powershell.exe");
+    let mut child = match Command::new(&ps)
+        .args(["-NoProfile", "-NonInteractive", "-NoLogo", "-Command", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => return (None, format!("[falha ao iniciar o PowerShell: {e}]")),
+    };
+    let prelude = "$ErrorActionPreference='Continue';$ProgressPreference='SilentlyContinue';\
+                   [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);";
+    if let Some(mut stdin) = child.stdin.take() {
+        // linha em branco no fim encerra blocos de várias linhas no modo -Command -
+        // o PowerShell lê a entrada padrão na code page OEM do Windows (ex.: 850)
+        let _ = stdin.write_all(&to_oem(&format!("{prelude}\n{script}\n\n")));
+    }
+    let mut so = child.stdout.take().unwrap();
+    let mut se = child.stderr.take().unwrap();
+    let t_out = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = (&mut so).take(MAX_PS_OUTPUT as u64 + 1024).read_to_end(&mut b);
+        b
+    });
+    let t_err = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = (&mut se).take(32 * 1024).read_to_end(&mut b);
+        b
+    });
+    let start = Instant::now();
+    let mut code = None;
+    let mut timed_out = false;
+    loop {
+        match child.try_wait() {
+            Ok(Some(st)) => {
+                code = st.code();
+                break;
+            }
+            Ok(None) if start.elapsed() > timeout => {
+                let _ = child.kill();
+                let _ = child.wait();
+                timed_out = true;
+                break;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+            Err(_) => break,
+        }
+    }
+    let mut text = String::from_utf8_lossy(&t_out.join().unwrap_or_default()).into_owned();
+    let err = String::from_utf8_lossy(&t_err.join().unwrap_or_default()).into_owned();
+    if !err.trim().is_empty() {
+        text.push_str("\n[erros]\n");
+        text.push_str(err.trim());
+    }
+    if text.len() > MAX_PS_OUTPUT {
+        let mut cut = MAX_PS_OUTPUT;
+        while !text.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        text.truncate(cut);
+        text.push_str("\n…[truncado]");
+    }
+    if timed_out {
+        text.push_str(&format!("\n[tempo limite de {}s atingido; comando encerrado]", timeout.as_secs()));
+    }
+    (code, text.replace("\r\n", "\n"))
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -331,5 +444,14 @@ mod tests {
         let s: String = out[i..].chars().take(14).collect();
         println!("{s:?}");
         assert!(s.starts_with("Configuração"), "{s:?}");
+    }
+
+    #[test]
+    fn powershell_multilinha_utf8() {
+        let (code, out) = super::run_powershell(
+            "$x = 0\nforeach ($i in 1..3) {\n  $x += $i\n}\n\"soma=$x ação\"",
+            std::time::Duration::from_secs(60));
+        assert_eq!(code, Some(0), "{out}");
+        assert!(out.contains("soma=6 ação"), "{out:?}");
     }
 }

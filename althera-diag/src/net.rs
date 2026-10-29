@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{Error as WsError, Message, WebSocket};
 
-use crate::{catalog, diag, win};
+use crate::{catalog, diag, policy, win};
 
 pub const AGENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Limite próprio do agente, independente do que o gateway disser.
@@ -84,7 +84,14 @@ fn now_s() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
-pub fn run(server: String, code: String, ui: UiSink, rx: Receiver<NetCmd>) {
+/// O que o cliente autorizou na tela.
+pub struct Consent {
+    pub tech_mode: bool,
+    pub request: String,
+    pub text: String,
+}
+
+pub fn run(server: String, code: String, consent: Consent, ui: UiSink, rx: Receiver<NetCmd>) {
     ui.log(format!("Conectando a {server} …"));
     let (mut ws, _) = match tungstenite::connect(server.as_str()) {
         Ok(x) => x,
@@ -102,8 +109,11 @@ pub fn run(server: String, code: String, ui: UiSink, rx: Receiver<NetCmd>) {
             "user": std::env::var("USERNAME").unwrap_or_default(),
             "machine_id_hash": win::machine_id_hash(),
             "agent_version": AGENT_VERSION,
+            "admin": win::is_admin(),
         },
-        "consent": {"accepted": true, "at": now_s(),
+        "request": consent.request,
+        "consent": {"accepted": true, "at": now_s(), "tech_mode": consent.tech_mode,
+                    "text": consent.text,
                     "shown": ([catalog::READ_ONLY, catalog::CHANGES].concat())},
     });
     if let Err(e) = send(&mut ws, hello) {
@@ -115,6 +125,7 @@ pub fn run(server: String, code: String, ui: UiSink, rx: Receiver<NetCmd>) {
     let start = Instant::now();
     let mut deadline = start + Duration::from_secs(20); // até chegar o welcome
     let mut connected = false;
+    let mut tech_mode = false;
     let mut pending_approvals: HashMap<String, (String, Value)> = HashMap::new();
     let mut approved: HashMap<String, (String, Value)> = HashMap::new();
     let (res_tx, res_rx) = channel::<(String, diag::Outcome, u128)>();
@@ -192,6 +203,7 @@ pub fn run(server: String, code: String, ui: UiSink, rx: Receiver<NetCmd>) {
         match s("t").as_str() {
             "welcome" if !connected => {
                 connected = true;
+                tech_mode = consent.tech_mode && m["tech_mode"].as_bool() == Some(true);
                 let exp = m["expires_at"].as_u64().unwrap_or(0).saturating_sub(now_s());
                 let lim = Duration::from_secs(exp).min(AGENT_MAX_SESSION);
                 deadline = Instant::now() + lim;
@@ -280,6 +292,59 @@ pub fn run(server: String, code: String, ui: UiSink, rx: Receiver<NetCmd>) {
                 std::thread::spawn(move || {
                     let t0 = Instant::now();
                     let out = diag::execute(&d, &args);
+                    let _ = tx.send((rid, out, t0.elapsed().as_millis()));
+                });
+            }
+            "exec" if connected => {
+                let rid = s("rid");
+                let script = s("script");
+                let reason: String = s("reason").chars().filter(|c| !c.is_control()).take(300).collect();
+                let refuse = |ws: &mut WebSocket<MaybeTlsStream<TcpStream>>, ui: &UiSink, why: String| {
+                    ui.log(format!("Comando RECUSADO ({why})."));
+                    let _ = send(ws, json!({"t": "result", "rid": rid, "ok": false, "output": "",
+                                            "error": why, "ms": 0}));
+                };
+                if !tech_mode {
+                    refuse(&mut ws, &ui, "o cliente não autorizou correções nesta sessão".into());
+                    continue;
+                }
+                if busy {
+                    refuse(&mut ws, &ui, "agente ocupado com outro comando".into());
+                    continue;
+                }
+                let approved_by = m["approved_by"].as_str().unwrap_or("").to_string();
+                match policy::check(&script) {
+                    Err(e) => {
+                        refuse(&mut ws, &ui, e);
+                        continue;
+                    }
+                    Ok(policy::Verdict::Sensitive(why)) if approved_by.is_empty() => {
+                        refuse(&mut ws, &ui, format!("ação sensível sem aprovação de técnico ({})", why.join(", ")));
+                        continue;
+                    }
+                    Ok(policy::Verdict::Sensitive(why)) => {
+                        ui.log(format!("⚠ Ação sensível ({}) aprovada por {approved_by}.", why.join(", ")));
+                    }
+                    Ok(policy::Verdict::Free) => {}
+                }
+                let first = script.lines().next().unwrap_or("").chars().take(160).collect::<String>();
+                let more = if script.lines().count() > 1 { " …" } else { "" };
+                ui.log(format!("🔧 {reason}\n     > {first}{more}"));
+                busy = true;
+                let timeout = Duration::from_secs(m["timeout_s"].as_u64().unwrap_or(90).clamp(5, 3600));
+                let tx = res_tx.clone();
+                std::thread::spawn(move || {
+                    let t0 = Instant::now();
+                    let (code, output) = win::run_powershell(&script, timeout);
+                    let out = diag::Outcome {
+                        ok: code == Some(0),
+                        output,
+                        error: match code {
+                            Some(0) => None,
+                            Some(c) => Some(format!("o comando terminou com código {c}")),
+                            None => Some("o comando foi interrompido".into()),
+                        },
+                    };
                     let _ = tx.send((rid, out, t0.elapsed().as_millis()));
                 });
             }

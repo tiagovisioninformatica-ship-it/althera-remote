@@ -1,0 +1,21 @@
+# Sites de onde o "modo técnico" pode baixar (drivers/atualizações). Um domínio por linha;
+# vale o domínio e seus subdomínios. Qualquer outro endereço em comando de download é bloqueado.
+altheratech.com.br
+microsoft.com
+windowsupdate.com
+hp.com
+epson.com
+epson.com.br
+brother.com
+brother.com.br
+canon.com
+canon.com.br
+kyoceradocumentsolutions.com
+kyoceradocumentsolutions.com.br
+samsung.com
+xerox.com
+ricoh.com
+lexmark.com
+elgin.com.br
+bematech.com.br
+zebra.com

@@ -11,6 +11,7 @@
 mod catalog;
 mod diag;
 mod net;
+mod policy;
 mod win;
 
 use std::sync::mpsc::{channel, Sender};
@@ -81,8 +82,8 @@ fn main() {
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build();
     let window = match WindowBuilder::new()
         .with_title("Althera Diagnóstico Remoto")
-        .with_inner_size(LogicalSize::new(1040.0, 700.0))
-        .with_min_inner_size(LogicalSize::new(980.0, 660.0))
+        .with_inner_size(LogicalSize::new(1040.0, 780.0))
+        .with_min_inner_size(LogicalSize::new(980.0, 740.0))
         .build(&event_loop)
     {
         Ok(w) => w,
@@ -128,7 +129,15 @@ fn main() {
             Event::UserEvent(AppEvent::Ipc(body)) => {
                 let m: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
                 match m["cmd"].as_str().unwrap_or("") {
+                    "elevate" if to_net.is_none() => {
+                        if win::relaunch_as_admin() {
+                            *control_flow = ControlFlow::Exit;
+                        } else {
+                            js(&webview, json!({"t": "alert", "text": "O Windows não concedeu permissão de administrador."}));
+                        }
+                    }
                     "ready" => {
+                        js(&webview, json!({"t": "admin", "admin": win::is_admin()}));
                         js(&webview, json!({"t": "server", "host": host_of(&server),
                             "text": format!("AltheraDiag {} — servidor: {}", net::AGENT_VERSION, server)}));
                         if let Err(e) = net::check_server_url(&server) {
@@ -158,7 +167,13 @@ fn main() {
                         let p = net_proxy.clone();
                         let sink = UiSink { tx: Arc::new(move |e| { let _ = p.send_event(AppEvent::Net(e)); }) };
                         let (srv, code) = (server.clone(), format!("{}-{}", &code[..4], &code[4..]));
-                        worker = Some(std::thread::spawn(move || net::run(srv, code, sink, rx)));
+                        let consent = net::Consent {
+                            tech_mode: m["tech_mode"].as_bool() == Some(true),
+                            request: m["request"].as_str().unwrap_or("").chars()
+                                .filter(|c| !c.is_control() || *c == '\n').take(500).collect(),
+                            text: m["consent_text"].as_str().unwrap_or("").chars().take(2000).collect(),
+                        };
+                        worker = Some(std::thread::spawn(move || net::run(srv, code, consent, sink, rx)));
                     }
                     "revoke" => {
                         if let Some(tx) = &to_net {
