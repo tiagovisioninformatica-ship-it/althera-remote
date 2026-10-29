@@ -60,3 +60,4 @@ flutter/web/
 /third_party/libdrmtap/
 # Local git worktrees
 .worktrees/
+/althera-diag/target

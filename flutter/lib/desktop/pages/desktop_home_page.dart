@@ -92,6 +92,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       buildTip(context),
       if (!isOutgoingOnly) buildIDBoard(context),
       if (!isOutgoingOnly) buildPasswordBoard(context),
+      if (isWindows) buildAltheraDiagButton(),
       FutureBuilder<Widget>(
         future: Future.value(
             Obx(() => buildHelpCards(stateGlobal.updateUrl.value))),
@@ -382,6 +383,36 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Althera: abre o AltheraDiag.exe (diagnóstico remoto com consentimento), empacotado ao
+  /// lado do executável. Nada é passado a ele: o cliente digita o código na própria janela.
+  Widget buildAltheraDiagButton() {
+    final exe =
+        '${File(Platform.resolvedExecutable).parent.path}\\AltheraDiag.exe';
+    if (!File(exe).existsSync()) return const Offstage();
+    const green = Color(0xFF9DB134);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 16, 0),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          icon: const Icon(Icons.health_and_safety_outlined, size: 18),
+          label: const Text('Diagnóstico Althera'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: green,
+            side: const BorderSide(color: green),
+          ),
+          onPressed: () async {
+            try {
+              await Process.start(exe, [], mode: ProcessStartMode.detached);
+            } catch (e) {
+              showToast('Não foi possível abrir o Diagnóstico Althera: $e');
+            }
+          },
+        ),
       ),
     );
   }

@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>Althera Diagnóstico Remoto</title>
+<style>
+  :root {
+    --bg: #070a08; --card: #0f1411; --card2: #121915; --line: #1f2a23; --text: #e6ebe7;
+    --muted: #9aa59d; --green: #8fd61c; --green2: #6fb80f; --red: #e5484d; --amber: #e8b93a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.45 "Segoe UI", system-ui, sans-serif; overflow: hidden; user-select: none; }
+  header { height: 151px; background: #050705 url(__HEADER__) center/cover no-repeat;
+    border-bottom: 1px solid var(--line); }
+  main { display: grid; grid-template-columns: 1fr 300px; gap: 14px; padding: 14px 16px 12px;
+    height: calc(100% - 151px); }
+  .card { background: linear-gradient(180deg, var(--card2), var(--card)); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px; }
+  .left { display: grid; grid-template-rows: auto 1fr; gap: 12px; min-height: 0; }
+  .right { display: grid; grid-template-rows: auto 1fr auto; gap: 12px; min-height: 0; }
+  h2 { margin: 0 0 6px; font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  h3 { margin: 0 0 8px; font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  svg { flex: none; }
+  .termo p { margin: 0 0 6px 30px; color: #d6ddd8; }
+  .termo ul { list-style: none; margin: 0 0 10px 30px; padding: 0; }
+  .termo li { position: relative; padding-left: 24px; margin: 3px 0; color: #d6ddd8; }
+  .termo li::before { content: ""; position: absolute; left: 0; top: 3px; width: 15px; height: 15px;
+    border-radius: 3px; background: var(--green) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%23071005' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat; }
+  b { color: #fff; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0 12px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  label.code { color: #d6ddd8; }
+  input[type=text] { width: 190px; height: 38px; border-radius: 8px; border: 1px solid #2c3a31;
+    background: #0a0e0b; color: #fff; font: 600 17px/1 Consolas, monospace; letter-spacing: 2px;
+    padding: 0 12px; outline: none; text-transform: uppercase; user-select: text; }
+  input[type=text]:focus { border-color: var(--green); box-shadow: 0 0 0 3px #8fd61c22; }
+  input[type=text]:disabled { opacity: .6; }
+  .icon-btn { width: 38px; height: 38px; border-radius: 8px; border: 1px solid #2c3a31; background: #0a0e0b;
+    color: #cfd6d1; display: grid; place-items: center; cursor: pointer; }
+  .icon-btn:hover { border-color: var(--green); color: var(--green); }
+  .check { display: flex; align-items: center; gap: 10px; margin: 12px 0 14px; cursor: pointer; color: #d6ddd8; }
+  .check input { appearance: none; width: 20px; height: 20px; border-radius: 4px; border: 1.5px solid #3a4a3f;
+    background: #0a0e0b; margin: 0; cursor: pointer; display: grid; place-items: center; }
+  .check input:checked { background: var(--green); border-color: var(--green); }
+  .check input:checked::after { content: ""; width: 10px; height: 6px; border: solid #071005;
+    border-width: 0 0 2.5px 2.5px; transform: translateY(-1px) rotate(-45deg); }
+  .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  button.big { height: 50px; border-radius: 10px; font: 600 17px "Segoe UI", sans-serif; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 12px; }
+  .allow { border: 0; color: #0b1406; background: linear-gradient(180deg, #a6ea2a, #74c00e);
+    box-shadow: 0 0 18px #8fd61c55, inset 0 1px 0 #ffffff55; }
+  .allow:hover:not(:disabled) { filter: brightness(1.07); }
+  .revoke { background: #0b0f0c; color: #e9eeea; border: 1.5px solid #59645c; }
+  .revoke:not(:disabled) { border-color: var(--red); color: #fff; }
+  .revoke:not(:disabled):hover { background: #2a0f10; }
+  button:disabled { opacity: .45; cursor: default; box-shadow: none; filter: grayscale(.4); }
+  .log { display: grid; grid-template-rows: auto 1fr; min-height: 0; padding-bottom: 12px; }
+  .log-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .small-btn { background: transparent; border: 1px solid #2c3a31; color: #cfd6d1; border-radius: 7px;
+    height: 28px; padding: 0 10px; font: 12.5px "Segoe UI"; cursor: pointer; display: flex; gap: 6px; align-items: center; }
+  .small-btn:hover { border-color: var(--green); color: var(--green); }
+  pre { margin: 0; background: #060907; border: 1px solid #18211b; border-radius: 8px; padding: 8px 12px;
+    font: 12.5px/1.55 Consolas, monospace; color: #c9d2cc; overflow: auto; white-space: pre-wrap;
+    user-select: text; min-height: 0; }
+  pre .ok { color: var(--green); } pre .bad { color: #ff8a8d; } pre .warn { color: var(--amber); }
+  .status { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: #6b736d; flex: none; }
+  .dot.on { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  .dot.wait { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+  .st-title { font-size: 19px; font-weight: 600; margin: 8px 0 2px; display: flex; align-items: center; gap: 10px; }
+  .st-sub { color: var(--muted); font-size: 12.5px; margin-left: 22px; }
+  .perm li { list-style: none; display: flex; align-items: center; gap: 10px; margin: 7px 0; color: #d6ddd8; font-size: 13.5px; }
+  .perm ul { margin: 0 0 12px; padding: 0; }
+  .secure { display: flex; align-items: center; gap: 12px; padding: 4px 6px 0; color: var(--muted); font-size: 12.5px; }
+  .secure span { color: var(--green); display: block; }
+</style>
+</head>
+<body>
+<header></header>
+<main>
+  <section class="left">
+    <div class="card termo">
+      <h2><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8fd61c" stroke-width="2" stroke-linecap="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2h6v4H9zM8.5 11h7M8.5 15h7"/></svg>Termo de Autorização</h2>
+      <p>Este programa permite que a equipe técnica da Althera Tech faça DIAGNÓSTICOS neste computador, somente durante esta sessão.</p>
+      <ul>
+        <li>O técnico poderá <b>LER:</b> dados do Windows, memória, discos, rede (ipconfig, ping, DNS, tracert) e a lista de serviços.</li>
+        <li>Qualquer <b>ALTERAÇÃO</b> (limpar DNS, reiniciar um serviço) só acontece se VOCÊ clicar "Sim" na janela de confirmação, e vale uma única vez.</li>
+        <li>Não há acesso a arquivos, senhas ou terminal. Nada é instalado.</li>
+        <li>Você pode encerrar a qualquer momento em "Revogar acesso agora" ou fechando esta janela.</li>
+      </ul>
+      <hr>
+      <div class="row">
+        <label class="code" for="code">Código informado pelo técnico:</label>
+        <input id="code" type="text" maxlength="9" placeholder="XXXX-XXXX" autocomplete="off" spellcheck="false">
+        <button class="icon-btn" id="paste" title="Colar código">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2"/></svg>
+        </button>
+      </div>
+      <label class="check"><input type="checkbox" id="consent">Li e autorizo o diagnóstico remoto nesta sessão</label>
+      <div class="buttons">
+        <button class="big allow" id="allow">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0"/><circle cx="12" cy="19.5" r="1.2" fill="currentColor"/></svg>
+          Permitir diagnóstico
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <button class="big revoke" id="revoke" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3" fill="currentColor"/></svg>
+          Revogar acesso agora
+        </button>
+      </div>
+    </div>
+    <div class="card log">
+      <div class="log-head">
+        <h3 style="margin:0"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8fd61c" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/></svg>Registro de eventos</h3>
+        <button class="small-btn" id="clear"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Limpar</button>
+      </div>
+      <pre id="log" role="log" aria-label="registro-log"></pre>
+    </div>
+  </section>
+
+  <aside class="right">
+    <div class="card">
+      <div class="status">
+        <div>
+          <h3><span class="dot on" style="width:10px;height:10px"></span>Status da Conexão</h3>
+          <div class="st-title"><span class="dot" id="dot"></span><span id="st-title">Desconectado</span></div>
+          <div class="st-sub" id="st-sub">Nenhum acesso ativo.</div>
+        </div>
+        <svg id="st-icon" width="78" height="66" viewBox="0 0 78 66" fill="none" stroke="#7d8781" stroke-width="3"><rect x="4" y="3" width="70" height="46" rx="3"/><path d="M27 62h24M39 49v13"/><circle cx="58" cy="44" r="13" fill="#0f1411"/><path d="M49 35l18 18"/></svg>
+      </div>
+    </div>
+    <div class="card perm">
+      <h3><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8fd61c" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>O que o técnico pode fazer?</h3>
+      <ul>
+        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8fd61c" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M8 20h8M12 16v4"/></svg>Ler informações do sistema</li>
+        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8fd61c" stroke-width="2"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5l-5.5 5.5M12 11.5l5.5 5.5"/></svg>Diagnosticar rede (IP, DNS, Ping, Tracert)</li>
+        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8fd61c" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Ver lista de serviços</li>
+      </ul>
+      <h3><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e5484d" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>O que NÃO é permitido?</h3>
+      <ul>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" stroke="#9aa59d" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>Não acessa seus arquivos</li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" stroke="#9aa59d" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>Não vê suas senhas</li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" stroke="#9aa59d" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>Não acessa o terminal</li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" stroke="#9aa59d" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>Nada é instalado</li>
+      </ul>
+    </div>
+    <div class="secure">
+      <svg width="30" height="34" viewBox="0 0 24 28" fill="#8fd61c"><path d="M6 11V8a6 6 0 0 1 12 0v3h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V13a2 2 0 0 1 2-2h1zm3 0h6V8a3 3 0 0 0-6 0v3z"/><circle cx="12" cy="18.5" r="2" fill="#071005"/></svg>
+      <div>Conexão segura e criptografada<span id="host">suporte.altheratech.com.br</span></div>
+    </div>
+  </aside>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const send = (o) => window.ipc.postMessage(JSON.stringify(o));
+  const code = $("code"), consent = $("consent"), allow = $("allow"), revoke = $("revoke"), log = $("log");
+  const now = () => new Date().toTimeString().slice(0, 8);
+
+  function addLog(text, cls) {
+    const line = document.createElement("div");
+    if (cls) line.className = cls;
+    line.textContent = `[${now()}] ${text}`;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+  }
+  function setState(state, title, sub) {
+    $("dot").className = "dot" + (state === "on" ? " on" : state === "wait" ? " wait" : "");
+    $("st-title").textContent = title;
+    $("st-sub").textContent = sub;
+    $("st-icon").setAttribute("stroke", state === "on" ? "#8fd61c" : "#7d8781");
+  }
+  function idle() {
+    code.disabled = false; consent.disabled = false; allow.disabled = false; revoke.disabled = true;
+    code.value = ""; consent.checked = false;
+  }
+
+  code.addEventListener("input", () => {
+    const raw = code.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+    code.value = raw.length > 4 ? raw.slice(0, 4) + "-" + raw.slice(4) : raw;
+  });
+  code.addEventListener("keydown", (e) => { if (e.key === "Enter") allow.click(); });
+  $("paste").addEventListener("click", () => send({ cmd: "paste" }));
+  $("clear").addEventListener("click", () => { log.textContent = ""; });
+  allow.addEventListener("click", () => {
+    send({ cmd: "allow", code: code.value, consent: consent.checked });
+  });
+  revoke.addEventListener("click", () => { revoke.disabled = true; send({ cmd: "revoke" }); });
+  document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  // Eventos vindos do Rust
+  window.althera = (ev) => {
+    switch (ev.t) {
+      case "log": addLog(ev.text, ev.cls); break;
+      case "server": $("host").textContent = ev.host; addLog(ev.text); break;
+      case "paste": code.value = ev.text; code.dispatchEvent(new Event("input")); break;
+      case "starting":
+        code.disabled = true; consent.disabled = true; allow.disabled = true; revoke.disabled = false;
+        setState("wait", "Conectando…", "Aguardando o servidor da Althera."); break;
+      case "connected":
+        setState("on", "Conectado", `Técnico: ${ev.technician} · encerra em até ${ev.minutes} min`);
+        addLog(`Sessão aberta para ${ev.technician} (limite ${ev.minutes} min).`, "ok"); break;
+      case "ended":
+        setState("off", "Desconectado", "Nenhum acesso ativo.");
+        addLog(ev.text, "warn"); idle(); break;
+      case "alert": addLog(ev.text, "bad"); break;
+    }
+  };
+  addLog("Aplicação iniciada.");
+  addLog("Aguardando autorização…");
+  send({ cmd: "ready" });
+})();
+</script>
+</body>
+</html>
