@@ -977,8 +977,12 @@ def build_flutter_windows(version, features, skip_portable_pack):
     os.chdir('..')
     shutil.copy2('target/release/deps/dylib_virtual_display.dll',
                  flutter_build_dir_2)
-    # Althera: módulo de diagnóstico remoto, empacotado ao lado do rustdesk.exe (botão na home)
-    system2('cargo build --locked --release --manifest-path althera-diag/Cargo.toml')
+    # Althera: módulo de diagnóstico remoto, empacotado ao lado do rustdesk.exe (botão na home).
+    # AltheraDiag.exe é um binário SEPARADO (não linka no rustdesk.exe), então não precisa ficar
+    # preso ao Rust 1.75 fixo do build do sciter. Esse 1.75 não compila as deps modernas do diag
+    # (icu_normalizer 2.x usa edition 2024), então buildamos esse módulo com um stable recente.
+    system2('rustup toolchain install stable --profile minimal --no-self-update')
+    system2('cargo +stable build --locked --release --manifest-path althera-diag/Cargo.toml')
     shutil.copy2('althera-diag/target/release/AltheraDiag.exe', flutter_build_dir_2)
     if skip_portable_pack:
         return
