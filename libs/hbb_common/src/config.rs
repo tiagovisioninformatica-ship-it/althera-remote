@@ -114,7 +114,10 @@ const CHARS: &[char] = &[
     'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
 
-pub const RENDEZVOUS_SERVERS: &[&str] = &["168.197.181.40"];
+// Hostname (não IP) de propósito: com WebSocket ligado (ver load_custom_client), o cliente
+// só monta `wss://host:443/ws/id|relay` — passando por qualquer rede que libere HTTPS — quando
+// o servidor é um domínio. Resolve para a VPS1 (168.197.181.40), mesmo hbbs/hbbr de antes.
+pub const RENDEZVOUS_SERVERS: &[&str] = &["suporte.altheratech.com.br"];
 // Chave pública do hbbs da VPS1 (id_ed25519.pub) — servidor self-hosted Althera.
 pub const RS_PUB_KEY: &str = "BaefSpOCqHgA31G75jNsrIrGcexYXSthfkcZJ20szag=";
 

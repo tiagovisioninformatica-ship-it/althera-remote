@@ -2467,6 +2467,25 @@ pub fn rustdesk_interval(i: Interval) -> ThrottledInterval {
 }
 
 pub fn load_custom_client() {
+    // Althera — padrão de fábrica de REDE: conectar sempre por WebSocket seguro (wss) na porta 443,
+    // sempre via relay. Assim o Althera Remote abre em qualquer rede de cliente, inclusive as que
+    // bloqueiam as portas próprias do RustDesk (21116/21117). São apenas DEFAULTS: o usuário ou um
+    // custom.txt ainda podem sobrescrever (get_option prefere o valor salvo e o OVERWRITE).
+    //   - allow-websocket=Y  -> use_ws()=true (força relay junto, ver src/client.rs)
+    //   - api-server=https   -> check_ws() escolhe o esquema "wss" para servidor-domínio
+    //   - websocket-port=443 -> wss://suporte.altheratech.com.br:443/ws/{id,relay} (proxy nginx)
+    //   - force-always-relay -> relay mesmo se alguém desligar o ws
+    {
+        let mut ds = config::DEFAULT_SETTINGS.write().unwrap();
+        ds.entry("allow-websocket".to_owned())
+            .or_insert_with(|| "Y".to_owned());
+        ds.entry("websocket-port".to_owned())
+            .or_insert_with(|| "443".to_owned());
+        ds.entry("api-server".to_owned())
+            .or_insert_with(|| "https://suporte.altheratech.com.br".to_owned());
+        ds.entry("force-always-relay".to_owned())
+            .or_insert_with(|| "Y".to_owned());
+    }
     #[cfg(debug_assertions)]
     if let Ok(data) = std::fs::read_to_string("./custom.txt") {
         read_custom_client(data.trim());
