@@ -61,3 +61,6 @@ flutter/web/
 # Local git worktrees
 .worktrees/
 /althera-diag/target
+
+# Althera: header do AltheraDiag e asset embutido (include_bytes!), precisa ir pro repo apesar do *jpg acima
+!althera-diag/assets/header.jpg
